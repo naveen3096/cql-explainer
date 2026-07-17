@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CQL Explainer</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3350;
+    --accent: #5b8dee;
+    --accent2: #7c5ce8;
+    --success: #00d2a0;
+    --warning: #fdcb6e;
+    --danger: #ff6b6b;
+    --text: #e2e8f0;
+    --text-muted: #8892a4;
+    --radius: 12px;
+    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* Header */
+  header {
+    background: linear-gradient(135deg, #1a1d27 0%, #0f1117 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 1.2rem 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+  }
+  header .logo {
+    width: 36px; height: 36px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: white;
+  }
+  header h1 { font-size: 1.25rem; font-weight: 600; }
+  header .badge {
+    margin-left: auto;
+    background: rgba(91,141,238,0.15);
+    border: 1px solid rgba(91,141,238,0.3);
+    color: var(--accent);
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  /* Layout */
+  .container { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+
+  /* Input area */
+  .input-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow);
+  }
+  .input-card label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+  }
+  .editor-wrapper {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .editor-wrapper:focus-within { border-color: var(--accent); }
+  textarea {
+    width: 100%;
+    height: 240px;
+    background: var(--surface2);
+    color: var(--text);
+    border: none;
+    padding: 1rem;
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    resize: vertical;
+    outline: none;
+  }
+  textarea::placeholder { color: var(--text-muted); }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.4rem;
+    border-radius: 8px;
+    border: none;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: white;
+    box-shadow: 0 4px 15px rgba(91,141,238,0.3);
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(91,141,238,0.4); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); background: rgba(91,141,238,0.08); }
+
+  .char-count { margin-left: auto; font-size: 0.75rem; color: var(--text-muted); }
+
+  /* Loading */
+  .loading-bar {
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2), var(--success), var(--accent));
+    background-size: 300% 100%;
+    animation: shimmer 1.5s infinite linear;
+    border-radius: 2px;
+    margin-bottom: 1.5rem;
+    display: none;
+  }
+  .loading-bar.active { display: block; }
+  @keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+
+  /* Library summary */
+  .library-header {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    animation: fadeIn 0.4s ease;
+  }
+  .library-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .tag-group { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .tag {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border: 1px solid;
+  }
+  .tag-blue { background: rgba(91,141,238,0.12); border-color: rgba(91,141,238,0.3); color: #7aacff; }
+  .tag-green { background: rgba(0,210,160,0.12); border-color: rgba(0,210,160,0.3); color: #00d2a0; }
+  .tag-purple { background: rgba(124,92,232,0.12); border-color: rgba(124,92,232,0.3); color: #a78bfa; }
+  .tag-yellow { background: rgba(253,203,110,0.12); border-color: rgba(253,203,110,0.3); color: #fdcb6e; }
+
+  /* Definition cards */
+  .section-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+  }
+
+  .def-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 1rem;
+    overflow: hidden;
+    animation: slideUp 0.35s ease both;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .def-card:hover { border-color: rgba(91,141,238,0.4); box-shadow: 0 4px 20px rgba(91,141,238,0.1); }
+
+  @keyframes slideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+
+  .def-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    user-select: none;
+  }
+  .def-card-header:hover { background: rgba(255,255,255,0.02); }
+  .def-icon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .def-name { font-weight: 600; font-size: 0.95rem; flex: 1; }
+  .def-lines {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    background: var(--surface2);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+  }
+  .chevron {
+    color: var(--text-muted);
+    transition: transform 0.25s;
+    font-size: 12px;
+  }
+  .def-card.open .chevron { transform: rotate(180deg); }
+
+  .def-card-body {
+    display: none;
+    border-top: 1px solid var(--border);
+  }
+  .def-card.open .def-card-body { display: block; }
+
+  .explanation-box {
+    padding: 1rem 1.25rem;
+    background: rgba(91,141,238,0.05);
+    border-bottom: 1px solid var(--border);
+    line-height: 1.7;
+    font-size: 0.9rem;
+    color: #c9d1e0;
+  }
+  .explanation-box strong { color: var(--accent); }
+
+  .code-block { position: relative; }
+  .code-block pre {
+    margin: 0;
+    padding: 1rem 1.25rem;
+    background: #1a1d27;
+    font-size: 12.5px;
+    line-height: 1.65;
+    overflow-x: auto;
+  }
+  .copy-btn {
+    position: absolute;
+    top: 0.5rem; right: 0.5rem;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 0.25rem 0.6rem;
+    border-radius: 5px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .copy-btn:hover { background: rgba(91,141,238,0.2); color: var(--accent); border-color: var(--accent); }
+  .copy-btn.copied { color: var(--success); border-color: var(--success); }
+
+  /* Population badge colors */
+  .pop-initial  { background: rgba(91,141,238,0.15);  color: #7aacff; }
+  .pop-denom    { background: rgba(253,203,110,0.15); color: #fdcb6e; }
+  .pop-num      { background: rgba(0,210,160,0.15);   color: #00d2a0; }
+  .pop-exclusion{ background: rgba(255,107,107,0.15); color: #ff6b6b; }
+  .pop-default  { background: rgba(124,92,232,0.15);  color: #a78bfa; }
+
+  /* Error */
+  .error-card {
+    background: rgba(255,107,107,0.08);
+    border: 1px solid rgba(255,107,107,0.3);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    color: #ff8f8f;
+    display: flex; gap: 0.75rem; align-items: flex-start;
+    animation: fadeIn 0.3s ease;
+  }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--text-muted);
+  }
+  .empty-state .icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.4; }
+  .empty-state p { font-size: 0.95rem; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3e4460; }
+
+  /* Sample CQL dropdown */
+  .sample-dropdown { position: relative; }
+  .sample-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    min-width: 220px;
+    z-index: 200;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .sample-menu.open { display: block; }
+  .sample-item {
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: background 0.15s, color 0.15s;
+  }
+  .sample-item:hover { background: rgba(91,141,238,0.1); color: var(--text); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">CQ</div>
+  <h1>CQL Explainer</h1>
+  <span class="badge">Clinical Quality Language</span>
+</header>
+
+<div class="container">
+  <div class="input-card">
+    <label>Paste your CQL below</label>
+    <div class="editor-wrapper">
+      <textarea id="cql-input" placeholder="library MyMeasure version '1.0.0'&#10;&#10;using FHIR version '4.0.1'&#10;&#10;define &quot;Initial Population&quot;:&#10;  AgeInYears() >= 18"></textarea>
+    </div>
+    <div class="toolbar">
+      <button class="btn btn-primary" id="explain-btn">
+        <span>&#9654;</span> Explain CQL
+      </button>
+      <div class="sample-dropdown">
+        <button class="btn btn-ghost" id="sample-btn">&#128196; Load Sample</button>
+        <div class="sample-menu" id="sample-menu">
+          <div class="sample-item" data-sample="diabetes">Diabetes HbA1c Measure</div>
+          <div class="sample-item" data-sample="hypertension">Hypertension Control</div>
+          <div class="sample-item" data-sample="screening">Preventive Screening</div>
+        </div>
+      </div>
+      <button class="btn btn-ghost" id="clear-btn">&#10005; Clear</button>
+      <span class="char-count" id="char-count">0 chars</span>
+    </div>
+  </div>
+
+  <div class="loading-bar" id="loading-bar"></div>
+
+  <div id="results">
+    <div class="empty-state">
+      <div class="icon">&#128196;</div>
+      <p>Paste CQL and click <strong>Explain CQL</strong> to get a plain-English breakdown of each define statement.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+const SAMPLES = {
+  diabetes: `library DiabetesHbA1c version '1.0.0'
+
+using FHIR version '4.0.1'
+
+include FHIRHelpers version '4.0.1'
+
+valueset "Diabetes Diagnosis": 'http://example.org/fhir/ValueSet/diabetes'
+valueset "HbA1c Test": 'http://example.org/fhir/ValueSet/hba1c'
+valueset "HbA1c Poor Control": 'http://example.org/fhir/ValueSet/hba1c-poor'
+
+parameter MeasurementPeriod Interval<DateTime>
+
+context Patient
+
+define "Initial Population":
+  AgeInYears() >= 18 and AgeInYears() < 75
+
+define "Denominator":
+  "Initial Population"
+    and exists ([Condition: "Diabetes Diagnosis"] C
+      where C.clinicalStatus ~ 'active')
+
+define "Denominator Exclusion":
+  not exists ([Encounter] E where E.status = 'finished'
+    and E.period during MeasurementPeriod)
+
+define "Numerator":
+  exists ([Observation: "HbA1c Poor Control"] O
+    where O.status = 'final'
+      and O.effective during MeasurementPeriod)`,
+
+  hypertension: `library HypertensionControl version '1.0.0'
+
+using FHIR version '4.0.1'
+
+include FHIRHelpers version '4.0.1'
+
+valueset "Essential Hypertension": 'http://example.org/fhir/ValueSet/hypertension'
+valueset "Blood Pressure Reading": 'http://example.org/fhir/ValueSet/bp'
+valueset "Outpatient Encounter": 'http://example.org/fhir/ValueSet/outpatient'
+
+parameter MeasurementPeriod Interval<DateTime>
+
+context Patient
+
+define "Initial Population":
+  AgeInYears() >= 18
+    and exists ([Encounter: "Outpatient Encounter"] E
+      where E.period during MeasurementPeriod)
+
+define "Denominator":
+  "Initial Population"
+    and exists ([Condition: "Essential Hypertension"] C
+      where C.clinicalStatus ~ 'active'
+        and C.verificationStatus ~ 'confirmed')
+
+define "Numerator":
+  Last([Observation: "Blood Pressure Reading"] O
+    where O.effective during MeasurementPeriod
+    sort by effective) is not null`,
+
+  screening: `library PreventiveScreening version '1.0.0'
+
+using FHIR version '4.0.1'
+
+include FHIRHelpers version '4.0.1'
+
+valueset "Colorectal Cancer Screening": 'http://example.org/fhir/ValueSet/colorectal'
+valueset "Colorectal Cancer": 'http://example.org/fhir/ValueSet/colorectal-cancer'
+valueset "Office Visit": 'http://example.org/fhir/ValueSet/office-visit'
+
+parameter MeasurementPeriod Interval<DateTime>
+
+context Patient
+
+define "Initial Population":
+  AgeInYears() >= 50 and AgeInYears() <= 75
+    and exists ([Encounter: "Office Visit"] E
+      where E.period during MeasurementPeriod)
+
+define "Denominator":
+  "Initial Population"
+
+define "Denominator Exclusion":
+  exists ([Condition: "Colorectal Cancer"] C
+    where C.clinicalStatus ~ 'active')
+
+define "Numerator":
+  exists ([Procedure: "Colorectal Cancer Screening"] P
+    where P.status = 'completed'
+      and P.performed during Interval[start of MeasurementPeriod - 10 years, end of MeasurementPeriod])`
+};
+
+function getDefIcon(name) {
+  const n = name.toLowerCase();
+  if (n.includes('initialpopulation') || n.includes('initial population')) return { icon: '&#128100;', cls: 'pop-initial' };
+  if (n.includes('denominatorexclusion') || n.includes('denominator exclusion')) return { icon: '&#10060;', cls: 'pop-exclusion' };
+  if (n.includes('denominatorexception') || n.includes('denominator exception')) return { icon: '&#9888;', cls: 'pop-exclusion' };
+  if (n.includes('denominator')) return { icon: '&#9711;', cls: 'pop-denom' };
+  if (n.includes('numeratorexclusion') || n.includes('numerator exclusion')) return { icon: '&#10060;', cls: 'pop-exclusion' };
+  if (n.includes('numerator')) return { icon: '&#10003;', cls: 'pop-num' };
+  return { icon: '&#128196;', cls: 'pop-default' };
+}
+
+function renderExplanation(text) {
+  return text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+}
+
+function copyToClipboard(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+  });
+}
+
+// Char counter
+document.getElementById('cql-input').addEventListener('input', function() {
+  document.getElementById('char-count').textContent = this.value.length.toLocaleString() + ' chars';
+});
+
+// Clear
+document.getElementById('clear-btn').addEventListener('click', () => {
+  document.getElementById('cql-input').value = '';
+  document.getElementById('char-count').textContent = '0 chars';
+  document.getElementById('results').innerHTML = `<div class="empty-state"><div class="icon">&#128196;</div><p>Paste CQL and click <strong>Explain CQL</strong> to get a plain-English breakdown.</p></div>`;
+});
+
+// Sample dropdown
+document.getElementById('sample-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  document.getElementById('sample-menu').classList.toggle('open');
+});
+document.addEventListener('click', () => document.getElementById('sample-menu').classList.remove('open'));
+document.querySelectorAll('.sample-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const cql = SAMPLES[item.dataset.sample];
+    document.getElementById('cql-input').value = cql;
+    document.getElementById('char-count').textContent = cql.length.toLocaleString() + ' chars';
+    document.getElementById('sample-menu').classList.remove('open');
+  });
+});
+
+// Main explain
+document.getElementById('explain-btn').addEventListener('click', async () => {
+  const cql = document.getElementById('cql-input').value.trim();
+  if (!cql) return;
+
+  const btn = document.getElementById('explain-btn');
+  const bar = document.getElementById('loading-bar');
+  const results = document.getElementById('results');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span>&#9203;</span> Analyzing...';
+  bar.classList.add('active');
+  results.innerHTML = '';
+
+  const res = await fetch('/explain', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cql }),
+  });
+
+  bar.classList.remove('active');
+  btn.disabled = false;
+  btn.innerHTML = '<span>&#9654;</span> Explain CQL';
+
+  if (!res.ok) {
+    const err = await res.json();
+    results.innerHTML = `<div class="error-card"><span>&#9888;</span><div><strong>Parse Error</strong><br>${err.detail}</div></div>`;
+    return;
+  }
+
+  const data = await res.json();
+
+  // Library summary
+  const vsNames = data.valuesets.map(v => v.name).filter(Boolean);
+  const incNames = data.includes || [];
+  const summaryHTML = `
+    <div class="library-header">
+      <div>
+        <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem">Library</div>
+        <div class="library-name">${data.library_name || 'Untitled Library'}</div>
+      </div>
+      ${vsNames.length ? `<div><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.4rem">Value Sets</div><div class="tag-group">${vsNames.map(n=>`<span class="tag tag-green">&#128278; ${n}</span>`).join('')}</div></div>` : ''}
+      ${data.usings?.length ? `<div><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.4rem">Model</div><div class="tag-group"><span class="tag tag-blue">&#128100; ${data.usings[0].replace('using','').trim()}</span></div></div>` : ''}
+      ${data.contexts?.length ? `<div><div style="font-size:0.7rem;color:var(--text-muted);margin-bottom:0.4rem">Context</div><div class="tag-group"><span class="tag tag-purple">&#127760; ${data.contexts[0].replace('context','').trim()}</span></div></div>` : ''}
+    </div>`;
+
+  results.innerHTML = summaryHTML;
+
+  if (!data.definitions?.length) {
+    results.innerHTML += `<div class="empty-state"><p>No <code>define</code> statements found in this library.</p></div>`;
+    return;
+  }
+
+  const sectionLabel = document.createElement('div');
+  sectionLabel.className = 'section-title';
+  sectionLabel.textContent = `${data.definitions.length} Define Statement${data.definitions.length !== 1 ? 's' : ''}`;
+  results.appendChild(sectionLabel);
+
+  data.definitions.forEach((def, i) => {
+    const { icon, cls } = getDefIcon(def.name);
+    const card = document.createElement('div');
+    card.className = 'def-card';
+    card.style.animationDelay = `${i * 0.06}s`;
+
+    card.innerHTML = `
+      <div class="def-card-header">
+        <div class="def-icon ${cls}">${icon}</div>
+        <div class="def-name">${def.name}</div>
+        <span class="def-lines">L${def.start_line}–${def.end_line}</span>
+        <span class="chevron">&#9660;</span>
+      </div>
+      <div class="def-card-body">
+        <div class="explanation-box">${renderExplanation(def.explanation || '')}</div>
+        <div class="code-block">
+          <pre><code class="language-sql">${def.source.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>
+          <button class="copy-btn">Copy</button>
+        </div>
+      </div>`;
+
+    // Toggle open/close
+    card.querySelector('.def-card-header').addEventListener('click', () => {
+      card.classList.toggle('open');
+    });
+
+    // Copy button
+    card.querySelector('.copy-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      copyToClipboard(def.source, e.target);
+    });
+
+    // Auto-open first card
+    if (i === 0) card.classList.add('open');
+
+    results.appendChild(card);
+  });
+
+  // Syntax highlight
+  document.querySelectorAll('pre code').forEach(el => hljs.highlightElement(el));
+});
+</script>
+</body>
+</html>
