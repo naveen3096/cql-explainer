@@ -627,6 +627,36 @@ function getCategory(name) {
   return 'Supporting Definitions';
 }
 
+// Definitions whose name doesn't map to a criterion (helper functions, SDEs, ...)
+// still belong to that criterion if a criterion definition references them by
+// name. Resolved iteratively so transitive references (helper of a helper) work,
+// and ties go to whichever criterion comes first in CATEGORY_ORDER.
+function categorizeDefinitions(definitions) {
+  const categoryOf = {};
+  definitions.forEach(def => { categoryOf[def.name] = getCategory(def.name); });
+
+  let changed = true;
+  let guard = 0;
+  while (changed && guard < 6) {
+    changed = false;
+    guard++;
+    definitions.forEach(def => {
+      if (categoryOf[def.name] !== 'Supporting Definitions') return;
+      const referencingCategories = definitions
+        .filter(other => other.name !== def.name
+          && categoryOf[other.name] !== 'Supporting Definitions'
+          && other.source && other.source.includes(def.name))
+        .map(other => categoryOf[other.name]);
+      if (referencingCategories.length) {
+        referencingCategories.sort((a, b) => CATEGORY_ORDER.indexOf(a) - CATEGORY_ORDER.indexOf(b));
+        categoryOf[def.name] = referencingCategories[0];
+        changed = true;
+      }
+    });
+  }
+  return categoryOf;
+}
+
 function renderExplanation(text) {
   return text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 }
@@ -766,9 +796,11 @@ document.getElementById('explain-btn').addEventListener('click', async () => {
 
   // Group definitions by measure criteria (IPP, Denominator, Numerator, ...)
   // treating the main library + any pasted additional (LAT) libraries as one whole CQL.
+  // Helper/supporting definitions are folded into the criterion that references them.
+  const categoryOf = categorizeDefinitions(data.definitions);
   const grouped = {};
   data.definitions.forEach(def => {
-    const category = getCategory(def.name);
+    const category = categoryOf[def.name];
     (grouped[category] = grouped[category] || []).push(def);
   });
 
