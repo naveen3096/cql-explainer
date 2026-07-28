@@ -628,18 +628,25 @@ function getCategory(name) {
 }
 
 // Definitions whose name doesn't map to a criterion (helper functions, SDEs, ...)
-// still belong to that criterion if a criterion definition references them by
-// name. Resolved iteratively so transitive references (helper of a helper) work,
-// and ties go to whichever criterion comes first in CATEGORY_ORDER.
+// still belong to that criterion if a criterion definition references them —
+// either directly by quoted name, or indirectly because their whole source
+// library is referenced (e.g. "Denominator Exclusion" calling
+// HEDIS2026_Hospice_deceased.HasHospiceorDeceased pulls in every definition
+// from the HEDIS2026_Hospice_deceased library). Resolved iteratively so
+// transitive references (helper of a helper, library of a library) work, and
+// ties go to whichever criterion comes first in CATEGORY_ORDER.
 function categorizeDefinitions(definitions) {
   const categoryOf = {};
   definitions.forEach(def => { categoryOf[def.name] = getCategory(def.name); });
 
   let changed = true;
   let guard = 0;
-  while (changed && guard < 6) {
+  while (changed && guard < 8) {
     changed = false;
     guard++;
+
+    // Direct reference: a criterion definition mentions this definition's
+    // (quoted) name in its source.
     definitions.forEach(def => {
       if (categoryOf[def.name] !== 'Supporting Definitions') return;
       const referencingCategories = definitions
@@ -650,6 +657,24 @@ function categorizeDefinitions(definitions) {
       if (referencingCategories.length) {
         referencingCategories.sort((a, b) => CATEGORY_ORDER.indexOf(a) - CATEGORY_ORDER.indexOf(b));
         categoryOf[def.name] = referencingCategories[0];
+        changed = true;
+      }
+    });
+
+    // Library-level reference: a criterion definition mentions this
+    // definition's source library name (qualified access like
+    // LibraryName.DefinitionName) — every definition from that library
+    // inherits the criterion.
+    definitions.forEach(def => {
+      if (categoryOf[def.name] !== 'Supporting Definitions' || !def.source_library) return;
+      const owningCategories = definitions
+        .filter(other => other.source_library !== def.source_library
+          && categoryOf[other.name] !== 'Supporting Definitions'
+          && other.source && other.source.includes(def.source_library))
+        .map(other => categoryOf[other.name]);
+      if (owningCategories.length) {
+        owningCategories.sort((a, b) => CATEGORY_ORDER.indexOf(a) - CATEGORY_ORDER.indexOf(b));
+        categoryOf[def.name] = owningCategories[0];
         changed = true;
       }
     });
