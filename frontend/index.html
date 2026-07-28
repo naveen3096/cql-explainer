@@ -341,6 +341,63 @@
     transition: background 0.15s, color 0.15s;
   }
   .sample-item:hover { background: rgba(91,141,238,0.1); color: var(--text); }
+
+  /* Additional library (LAT) section */
+  .lat-section {
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+  }
+  .lat-question {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .lat-question > span {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .radio-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .radio-inline input { accent-color: var(--accent); cursor: pointer; }
+  .lat-count-row {
+    display: none;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1rem;
+  }
+  .lat-count-row.visible { display: flex; }
+  .lat-count-row span { font-size: 0.85rem; color: var(--text); }
+  .lat-count-input {
+    width: 70px;
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.85rem;
+    outline: none;
+  }
+  .lat-count-input:focus { border-color: var(--accent); }
+  .lat-boxes { margin-top: 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
+  .lat-box label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+  }
+  .lat-box textarea { height: 140px; }
 </style>
 </head>
 <body>
@@ -371,6 +428,20 @@
       </div>
       <button class="btn btn-ghost" id="clear-btn">&#10005; Clear</button>
       <span class="char-count" id="char-count">0 chars</span>
+    </div>
+
+    <div class="lat-section">
+      <div class="lat-question">
+        <span>Paste additional library (LAT) CQL for context?</span>
+        <label class="radio-inline"><input type="radio" name="lat-yn" value="no" checked> No</label>
+        <label class="radio-inline"><input type="radio" name="lat-yn" value="yes"> Yes</label>
+      </div>
+      <div class="lat-count-row" id="lat-count-row">
+        <span>How many libraries?</span>
+        <input type="number" id="lat-count" class="lat-count-input" min="1" max="10" value="1">
+        <button class="btn btn-ghost" id="lat-generate-btn" type="button">Generate paste boxes</button>
+      </div>
+      <div class="lat-boxes" id="lat-boxes"></div>
     </div>
   </div>
 
@@ -512,6 +583,9 @@ document.getElementById('clear-btn').addEventListener('click', () => {
   document.getElementById('cql-input').value = '';
   document.getElementById('char-count').textContent = '0 chars';
   document.getElementById('results').innerHTML = `<div class="empty-state"><div class="icon">&#128196;</div><p>Paste CQL and click <strong>Explain CQL</strong> to get a plain-English breakdown.</p></div>`;
+  document.querySelector('input[name="lat-yn"][value="no"]').checked = true;
+  document.getElementById('lat-count-row').classList.remove('visible');
+  document.getElementById('lat-boxes').innerHTML = '';
 });
 
 // Sample dropdown
@@ -529,10 +603,47 @@ document.querySelectorAll('.sample-item').forEach(item => {
   });
 });
 
+// Additional library (LAT) toggle
+document.querySelectorAll('input[name="lat-yn"]').forEach(radio => {
+  radio.addEventListener('change', (e) => {
+    const showCount = e.target.value === 'yes';
+    document.getElementById('lat-count-row').classList.toggle('visible', showCount);
+    if (!showCount) {
+      document.getElementById('lat-boxes').innerHTML = '';
+    }
+  });
+});
+
+// Generate the requested number of LAT paste boxes
+document.getElementById('lat-generate-btn').addEventListener('click', () => {
+  const countInput = document.getElementById('lat-count');
+  let count = parseInt(countInput.value, 10);
+  if (!Number.isFinite(count) || count < 1) count = 1;
+  if (count > 10) count = 10;
+  countInput.value = count;
+
+  const container = document.getElementById('lat-boxes');
+  container.innerHTML = '';
+  for (let i = 1; i <= count; i++) {
+    const box = document.createElement('div');
+    box.className = 'lat-box';
+    box.innerHTML = `
+      <label>Additional Library ${i}</label>
+      <div class="editor-wrapper">
+        <textarea class="lat-textarea" placeholder="library CommonHelpers version '1.0.0'&#10;&#10;define &quot;SomeHelper&quot;:&#10;  ..."></textarea>
+      </div>`;
+    container.appendChild(box);
+  }
+});
+
 // Main explain
 document.getElementById('explain-btn').addEventListener('click', async () => {
   const cql = document.getElementById('cql-input').value.trim();
   if (!cql) return;
+
+  const includedCql = Array.from(document.querySelectorAll('.lat-textarea'))
+    .map(t => t.value.trim())
+    .filter(Boolean);
 
   const btn = document.getElementById('explain-btn');
   const bar = document.getElementById('loading-bar');
@@ -546,7 +657,7 @@ document.getElementById('explain-btn').addEventListener('click', async () => {
   const res = await fetch('/explain', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cql }),
+    body: JSON.stringify({ cql, included_cql: includedCql }),
   });
 
   bar.classList.remove('active');
