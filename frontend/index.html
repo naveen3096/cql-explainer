@@ -398,6 +398,46 @@
     margin-bottom: 0.5rem;
   }
   .lat-box textarea { height: 140px; }
+
+  .explain-row {
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+  }
+
+  /* Category grouping */
+  .category-group { margin-bottom: 1.75rem; }
+  .category-title {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text);
+    margin-bottom: 0.9rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .category-count {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--surface2);
+    padding: 0.1rem 0.5rem;
+    border-radius: 20px;
+  }
+  .def-source-tag {
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+  }
 </style>
 </head>
 <body>
@@ -415,9 +455,6 @@
       <textarea id="cql-input" placeholder="library MyMeasure version '1.0.0'&#10;&#10;using FHIR version '4.0.1'&#10;&#10;define &quot;Initial Population&quot;:&#10;  AgeInYears() >= 18"></textarea>
     </div>
     <div class="toolbar">
-      <button class="btn btn-primary" id="explain-btn">
-        <span>&#9654;</span> Explain CQL
-      </button>
       <div class="sample-dropdown">
         <button class="btn btn-ghost" id="sample-btn">&#128196; Load Sample</button>
         <div class="sample-menu" id="sample-menu">
@@ -442,6 +479,12 @@
         <button class="btn btn-ghost" id="lat-generate-btn" type="button">Generate paste boxes</button>
       </div>
       <div class="lat-boxes" id="lat-boxes"></div>
+    </div>
+
+    <div class="explain-row">
+      <button class="btn btn-primary" id="explain-btn">
+        <span>&#9654;</span> Explain CQL
+      </button>
     </div>
   </div>
 
@@ -559,6 +602,29 @@ function getDefIcon(name) {
   if (n.includes('numeratorexclusion') || n.includes('numerator exclusion')) return { icon: '&#10060;', cls: 'pop-exclusion' };
   if (n.includes('numerator')) return { icon: '&#10003;', cls: 'pop-num' };
   return { icon: '&#128196;', cls: 'pop-default' };
+}
+
+// Ordered measure-criteria categories. Anything that doesn't match a criterion
+// name falls into "Supporting Definitions" (helper functions, SDEs, etc.)
+const CATEGORY_ORDER = [
+  'Initial Population (IPP)',
+  'Denominator',
+  'Denominator Exclusion',
+  'Denominator Exception',
+  'Numerator',
+  'Numerator Exclusion',
+  'Supporting Definitions',
+];
+
+function getCategory(name) {
+  const n = name.toLowerCase().replace(/\s+/g, '');
+  if (n.includes('initialpopulation')) return 'Initial Population (IPP)';
+  if (n.includes('denominatorexclusion')) return 'Denominator Exclusion';
+  if (n.includes('denominatorexception')) return 'Denominator Exception';
+  if (n.includes('denominator')) return 'Denominator';
+  if (n.includes('numeratorexclusion')) return 'Numerator Exclusion';
+  if (n.includes('numerator')) return 'Numerator';
+  return 'Supporting Definitions';
 }
 
 function renderExplanation(text) {
@@ -698,42 +764,67 @@ document.getElementById('explain-btn').addEventListener('click', async () => {
   sectionLabel.textContent = `${data.definitions.length} Define Statement${data.definitions.length !== 1 ? 's' : ''}`;
   results.appendChild(sectionLabel);
 
-  data.definitions.forEach((def, i) => {
-    const { icon, cls } = getDefIcon(def.name);
-    const card = document.createElement('div');
-    card.className = 'def-card';
-    card.style.animationDelay = `${i * 0.06}s`;
+  // Group definitions by measure criteria (IPP, Denominator, Numerator, ...)
+  // treating the main library + any pasted additional (LAT) libraries as one whole CQL.
+  const grouped = {};
+  data.definitions.forEach(def => {
+    const category = getCategory(def.name);
+    (grouped[category] = grouped[category] || []).push(def);
+  });
 
-    card.innerHTML = `
-      <div class="def-card-header">
-        <div class="def-icon ${cls}">${icon}</div>
-        <div class="def-name">${def.name}</div>
-        <span class="def-lines">L${def.start_line}–${def.end_line}</span>
-        <span class="chevron">&#9660;</span>
-      </div>
-      <div class="def-card-body">
-        <div class="explanation-box">${renderExplanation(def.explanation || '')}</div>
-        <div class="code-block">
-          <pre><code class="language-sql">${def.source.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>
-          <button class="copy-btn">Copy</button>
+  let cardIndex = 0;
+  CATEGORY_ORDER.forEach(category => {
+    const defs = grouped[category];
+    if (!defs || !defs.length) return;
+
+    const group = document.createElement('div');
+    group.className = 'category-group';
+    group.innerHTML = `<div class="category-title">${category} <span class="category-count">${defs.length}</span></div>`;
+
+    defs.forEach(def => {
+      const { icon, cls } = getDefIcon(def.name);
+      const card = document.createElement('div');
+      card.className = 'def-card';
+      card.style.animationDelay = `${cardIndex * 0.06}s`;
+
+      const sourceTag = data.included_libraries?.length && def.source_library
+        ? `<span class="def-source-tag">${def.source_library}</span>` : '';
+
+      card.innerHTML = `
+        <div class="def-card-header">
+          <div class="def-icon ${cls}">${icon}</div>
+          <div class="def-name">${def.name}</div>
+          ${sourceTag}
+          <span class="def-lines">L${def.start_line}–${def.end_line}</span>
+          <span class="chevron">&#9660;</span>
         </div>
-      </div>`;
+        <div class="def-card-body">
+          <div class="explanation-box">${renderExplanation(def.explanation || '')}</div>
+          <div class="code-block">
+            <pre><code class="language-sql">${def.source.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></pre>
+            <button class="copy-btn">Copy</button>
+          </div>
+        </div>`;
 
-    // Toggle open/close
-    card.querySelector('.def-card-header').addEventListener('click', () => {
-      card.classList.toggle('open');
+      // Toggle open/close
+      card.querySelector('.def-card-header').addEventListener('click', () => {
+        card.classList.toggle('open');
+      });
+
+      // Copy button
+      card.querySelector('.copy-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        copyToClipboard(def.source, e.target);
+      });
+
+      // Auto-open first card overall
+      if (cardIndex === 0) card.classList.add('open');
+      cardIndex++;
+
+      group.appendChild(card);
     });
 
-    // Copy button
-    card.querySelector('.copy-btn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      copyToClipboard(def.source, e.target);
-    });
-
-    // Auto-open first card
-    if (i === 0) card.classList.add('open');
-
-    results.appendChild(card);
+    results.appendChild(group);
   });
 
   // Syntax highlight

@@ -35,6 +35,8 @@ async def explain(req: ExplainRequest):
     if included_libraries:
         known_valuesets = {v["name"] for v in structure["valuesets"]}
         known_codesystems = set(structure["codesystems"])
+        for d in structure["definitions"]:
+            d["source_library"] = structure["library_name"]
         for lib in included_libraries:
             for v in lib["valuesets"]:
                 if v["name"] not in known_valuesets:
@@ -44,6 +46,9 @@ async def explain(req: ExplainRequest):
                 if c not in known_codesystems:
                     structure["codesystems"].append(c)
                     known_codesystems.add(c)
+            for d in lib["definitions"]:
+                d["source_library"] = lib["library_name"]
+                structure["definitions"].append(d)
         structure["included_libraries"] = [lib["library_name"] for lib in included_libraries]
 
     structure = await explain_all(structure)
